@@ -1,0 +1,107 @@
+#include "minhttp.h"
+
+
+/*
+If 'method' is NULL, will return cursor pointed to first endpoint section byte.
+*/
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_method(char* data, unsigned short len, unsigned short* cursor, enum HTTP_METHOD* method) {
+  if(!cursor) return NULL_CURSOR;
+  if(len < 3) return DATA_LEN_TOO_SMALL;
+  switch(data[(*cursor)]) {
+    // GET
+    case 'G': {
+      if(data[(*cursor)+1] != 'E' || data[(*cursor)+2] != 'T') return INVALID_DATA;
+      if(method) *method = GET;
+      *cursor += 3;
+      return SUCCESS;
+    }
+    // PUT
+    // POST
+    // PATCH
+    case 'P': {
+      switch(data[(*cursor)+1]) {
+        case 'U': {
+          if(data[(*cursor)+2] != 'T') return INVALID_DATA;
+          if(method) *method = PUT;
+          *cursor += 3;
+          return SUCCESS;
+        }
+        case 'O': {
+          if(len < 4) return DATA_LEN_TOO_SMALL;
+          if(data[(*cursor)+2] != 'S' || data[(*cursor)+3] != 'T') return INVALID_DATA;
+          if(method) *method = POST;
+          *cursor += 4;
+          return SUCCESS;
+        }
+        case 'A': {
+          if(len < 5) return DATA_LEN_TOO_SMALL;
+          if(data[(*cursor)+2] != 'T' || data[(*cursor)+3] != 'C' || data[(*cursor)+4] != 'H') return INVALID_DATA;
+          if(method) *method = PATCH;
+          *cursor += 5;
+          return SUCCESS;
+        }
+      }
+    }
+    // OPTIONS
+    case 'O': {
+      if(len < 7) return DATA_LEN_TOO_SMALL;
+      if(data[(*cursor)+1] != 'P' ||
+        data[(*cursor)+2] != 'T' ||
+        data[(*cursor)+3] != 'I' ||
+        data[(*cursor)+4] != 'O' ||
+        data[(*cursor)+5] != 'N' ||
+        data[(*cursor)+6] != 'S') return INVALID_DATA;
+      if(method) *method = OPTIONS;
+      *cursor += 7;
+      return SUCCESS;
+    }
+    // HEAD
+    case 'H': {
+      if(len < 4) return DATA_LEN_TOO_SMALL;
+      if(data[(*cursor)+1] != 'E' || data[(*cursor)+2] != 'A' || data[(*cursor)+3] != 'D') return INVALID_DATA;
+      if(method) *method = HEAD;
+      *cursor += 4;
+      return SUCCESS;
+    }
+    // DELETE
+    case 'D': {
+      if(len < 6) return DATA_LEN_TOO_SMALL;
+      if(data[(*cursor)+1] != 'E' ||
+          data[(*cursor)+2] != 'L' ||
+          data[(*cursor)+3] != 'E' ||
+          data[(*cursor)+4] != 'T' ||
+          data[(*cursor)+5] != 'E') return INVALID_DATA;
+      if(method) *method = DELETE;
+      *cursor += 6;
+      return SUCCESS;
+    }
+    // TRACE
+    case 'T': {
+      if(len < 5) return DATA_LEN_TOO_SMALL;
+      if(data[(*cursor)+1] != 'R' ||
+          data[(*cursor)+2] != 'A' ||
+          data[(*cursor)+3] != 'C' ||
+          data[(*cursor)+4] != 'E') return INVALID_DATA;
+      if(method) *method = TRACE;
+      *cursor += 5;
+      return SUCCESS;
+    }
+  }
+  return INVALID_DATA;
+}
+/*
+'parse_method' must be called first. 
+If 'endpoint' is NULL, will return cursor pointed to first version section byte.
+*/
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_endpoint(char* data, unsigned short len, unsigned short* cursor, char* endpoint, unsigned short max_len) {}
+/*
+'parse_parse_endpoint' must be called first. 
+If 'version' is NULL, will return cursor pointed to first header section byte.
+*/
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_http_version(char* data, unsigned short len, unsigned short* cursor, enum HTTP_VERSION* version) {}
+/*
+'parse_http_version' must be called first. 
+If 'headers' is NULL, will return cursor pointed to first payload byte.
+'headers' must be an array of arrays, where each element has a key header as the first item and a writable address of 'max_value_len' as the second.
+*/
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_headers(char* data, unsigned short len, unsigned short* cursor, char** headers, unsigned short num_headers, unsigned short max_key_len, unsigned short max_value_len) {}

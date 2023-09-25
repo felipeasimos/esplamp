@@ -6,6 +6,7 @@
 #include "pwm.h"
 #include "gpio.h"
 #include "espconn.h"
+#include <minhttp.h>
 
 #ifndef WIFI_SSID
 #error "Please specify WIFI_SSID"
@@ -22,6 +23,8 @@
 #define MAX_DUTY (PERIOD * 1000 / 45)
 #define RGB_TRANSITION_TIMER 50
 #define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY * 0.0004)
+
+#define WEBSERVER_PORT 80
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
@@ -111,32 +114,54 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
 
-void ICACHE_FLASH_ATTR block_for_wifi(void) {
+void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
+  unsigned short cursor = 0;
+  enum HTTP_METHOD method;
+  if(parse_method(data, len, &cursor, &method)) {
+    os_printf("error parsing method!\n");
+  }
+  os_printf("method %u\n", method);
+}
 
+void ICACHE_FLASH_ATTR sent_callback(void* arg) {
+  os_printf("sent cb\n");
+}
+
+void ICACHE_FLASH_ATTR disconnect_callback(void* arg) {
+  os_printf("disconnect cb\n");
+}
+
+void ICACHE_FLASH_ATTR reconnect_callback(void* arg, int8_t err) {
+  os_printf("reconnect cb\n");
+}
+
+void ICACHE_FLASH_ATTR connect_callback(void* arg) {
+  os_printf("connect cb\n");
+  espconn_regist_recvcb(arg, recv_callback);
+  espconn_regist_reconcb(arg, reconnect_callback);
+  espconn_regist_disconcb(arg, disconnect_callback);
+}
+
+void ICACHE_FLASH_ATTR block_for_wifi(void) {
+    static esp_tcp esptcp = {
+      .local_port = WEBSERVER_PORT
+    };
+    static struct espconn espconn = {
+      .type = ESPCONN_TCP,
+      .state = ESPCONN_NONE,
+      .proto.tcp = &esptcp,
+    };
     os_timer_disarm(&ptimer);
     if(wifi_station_get_connect_status() != STATION_GOT_IP) {
       os_timer_setfn(&ptimer, (os_timer_func_t *)block_for_wifi, NULL);
       os_timer_arm(&ptimer, 1000, 1);
       return;
     }
-    // struct espconn {
-    //     /** type of the espconn (TCP, UDP) */
-    //     enum espconn_type type;
-    //     /** current state of the espconn */
-    //     enum espconn_state state;
-    //     union {
-    //         esp_tcp *tcp;
-    //         esp_udp *udp;
-    //     } proto;
-    //     /** A callback function that is informed about events for this espconn */
-    //     espconn_recv_callback recv_callback;
-    // 	espconn_sent_callback sent_callback;
-    // 	uint8 link_cnt;
-    // 	void *reverse;
-    // };
+    espconn_regist_connectcb(&espconn, connect_callback);
+    os_printf("%u\n", espconn_accept(&espconn));
 
-    os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
-    os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
+    // os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
+    // os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
 
 void ICACHE_FLASH_ATTR user_main() {
