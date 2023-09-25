@@ -20,9 +20,10 @@ enum HTTP_VERSION {
 
 enum HTTP_PARSE_CODE {
   SUCCESS = 0,
-  NULL_CURSOR,
+  NULL_LEN,
   DATA_LEN_TOO_SMALL,
-  INVALID_DATA
+  INVALID_DATA,
+  ENDPOINT_TRUNCATED
 };
 
 #ifdef ICACHE_FLASH_ATTR
@@ -32,28 +33,24 @@ enum HTTP_PARSE_CODE {
 #endif
 
 /*
-If 'method' is NULL, will still return cursor pointed to first byte after method part.
-'cursor' value only changes on success.
-*/
-enum HTTP_PARSE_CODE ICACHE_FLASH_ATTR parse_method(char* data, unsigned short len, unsigned short* cursor, enum HTTP_METHOD* method);
-/*
-'parse_method' must be called first. 
-If 'endpoint' is NULL, will still return cursor pointed to first byte after endpoint part.
-'cursor' value only changes on success.
-*/
-enum HTTP_PARSE_CODE ICACHE_FLASH_ATTR parse_endpoint(char* data, unsigned short len, unsigned short* cursor, char* endpoint, unsigned short max_len);
-/*
-'parse_parse_endpoint' must be called first. 
-If 'version' is NULL, will still return cursor pointed to first byte after version part (newline).
-'cursor' value only changes on success.
-*/
-enum HTTP_PARSE_CODE ICACHE_FLASH_ATTR parse_http_version(char* data, unsigned short len, unsigned short* cursor, enum HTTP_VERSION* version);
-/*
-'parse_http_version' must be called first. 
-If 'headers' is NULL, will still return cursor pointed to first byte after header section (invalid, or double newline).
-'headers' must be an array of arrays, where each element has a key header as the first item and a writable address of 'max_value_len' as the second.
-'cursor' value only changes on success.
-*/
-enum HTTP_PARSE_CODE ICACHE_FLASH_ATTR parse_headers(char* data, unsigned short len, unsigned short* cursor, char** headers, unsigned short num_headers, unsigned short max_key_len, unsigned short max_value_len);
-
-
+parse http request.
+'data' is your request string.
+'len' is its size (or max size). As a return value, its the index in 'data' for the first payload byte.
+'method' will return the parsed HTTP_METHOD.
+'endpoint' will return the endpoint parsed. It must point to an allocated space of at least 'max_endpoint_len' bytes.
+'version' will return an http version.
+'headers' is a 2 dimensional array, where each element contains two items: an already defined HTTP header and an address where the value can be stored. The function will return the values of the defined keys in these addresses, halting parsing for a header if it hits 'max_key_len' and truncating values with 'max_value_len'. Keys that are not found in the given 'headers' will be ignored.
+'method', 'endpoint', 'version' and 'headers' can be NULL. The parsing will proceed faster in the NULLified sections, by just looking for the section.
+ */
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_http(
+    char* data,
+    unsigned short* len,
+    enum HTTP_METHOD* method,
+    char* endpoint,
+    unsigned short* max_endpoint_len,
+    enum HTTP_VERSION* version,
+    char** headers,
+    unsigned short num_headers,
+    unsigned short max_key_len,
+    unsigned short max_value_len
+);
