@@ -42,7 +42,7 @@ parse http request.
 'headers' is a 2 dimensional array, where each element contains two items: an already defined HTTP header and an address where the value can be stored. The function will return the values of the defined keys in these addresses, halting parsing for a header if it hits 'max_key_len' and truncating values with 'max_value_len'. Keys that are not found in the given 'headers' will be ignored.
 'method', 'endpoint', 'version' and 'headers' can be NULL. The parsing will proceed faster in the NULLified sections, by just looking for the section.
  */
-enum HTTP_PARSE_CODE METHOD_PREFIX parse_http(
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_http_request(
     char* data,
     unsigned short* len,
     enum HTTP_METHOD* method,
@@ -53,4 +53,25 @@ enum HTTP_PARSE_CODE METHOD_PREFIX parse_http(
     unsigned short num_headers,
     unsigned short max_key_len,
     unsigned short max_value_len
+);
+
+void METHOD_PREFIX build_http_request();
+
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_http_response();
+
+/*
+returns HTTP response in 'data' with length 'len'
+ */
+void METHOD_PREFIX build_http_response(
+    char* data,
+    unsigned short* len,
+    enum HTTP_METHOD method,
+    char* endpoint,
+    enum HTTP_VERSION version,
+    char** headers,
+    unsigned short num_headers,
+    unsigned short max_key_len,
+    unsigned short max_value_len,
+    void* payload,
+    unsigned short payload_len
 );

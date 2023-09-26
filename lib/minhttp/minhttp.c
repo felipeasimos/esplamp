@@ -128,7 +128,7 @@ If 'headers' is NULL, will return cursor pointed to first payload byte.
 */
 enum HTTP_PARSE_CODE METHOD_PREFIX parse_headers(char* data, unsigned short len, unsigned short* cursor, char** headers, unsigned short num_headers, unsigned short max_key_len, unsigned short max_value_len) {}
 
-enum HTTP_PARSE_CODE METHOD_PREFIX parse_http(
+enum HTTP_PARSE_CODE METHOD_PREFIX parse_http_request(
     char* data,
     unsigned short* len,
     enum HTTP_METHOD* method,
@@ -146,7 +146,14 @@ enum HTTP_PARSE_CODE METHOD_PREFIX parse_http(
   if(*len <= cursor) return DATA_LEN_TOO_SMALL;
   enum HTTP_PARSE_CODE result;
   if(( result = parse_method(data, *len, &cursor, method) )) goto _return_result;
-
+  GO_TO_FIRST_NON_WHITESPACE(data, *len, &cursor);
+  if(( result = parse_endpoint(data, *len, &cursor, endpoint, max_endpoint_len) )) goto _return_result;
+  GO_TO_FIRST_NON_WHITESPACE(data, *len, &cursor);
+  if(( result = parse_version(data, *len, &cursor, version) )) goto _return_result;
+  GO_TO_FIRST_NON_WHITESPACE(data, *len, &cursor);
+  if(( result = parse_headers(data, *len, &cursor, headers, num_headers, max_key_len, max_value_len) )) goto _return_result;
+  GO_TO_FIRST_NON_WHITESPACE(data, *len, &cursor);
+  if( cursor < *len ) *len = cursor;
 
 _return_result:
   return result;
