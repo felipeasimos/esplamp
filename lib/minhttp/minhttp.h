@@ -39,7 +39,7 @@ parse http request.
 'method' will return the parsed HTTP_METHOD.
 'endpoint' will return the endpoint parsed. It must point to an allocated space of at least 'max_endpoint_len' bytes.
 'version' will return an http version.
-'headers' is a 2 dimensional array, where each element contains two items: an already defined HTTP header and an address where the value can be stored. The function will return the values of the defined keys in these addresses, halting parsing for a header if it hits 'max_key_len' and truncating values with 'max_value_len'. Keys that are not found in the given 'headers' will be ignored.
+'headers' is a 2 dimensional array, where each element contains two items: an already defined HTTP header and an address where the value can be stored. The function will return the values of the defined keys in these addresses, halting parsing for a header if it hits 'max_key_len' and truncating values with 'max_value_len'. Keys that are not found in the given 'headers' will be ignored. The address used to store they keys must start with an NULL byte. Headers with empty keys are not parsed. Duplicate parser keys have only the first value saved.
 'method', 'endpoint', 'version' and 'headers' can be NULL. The parsing will proceed faster in the NULLified sections, by just looking for the section.
  */
 enum HTTP_PARSE_CODE METHOD_PREFIX parse_http_request(
