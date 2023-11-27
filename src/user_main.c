@@ -116,15 +116,17 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
 
 void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
   unsigned short cursor = 0;
-  enum HTTP_METHOD method;
-  if(parse_http_request(data, &len, &method, NULL, 0, NULL, NULL, 0, 0, 0)) {
+  enum HTTP_METHOD method = 0;
+  unsigned short max_endpoint_len = 99;
+  char endpoint[100] = {0};
+  enum HTTP_VERSION version = 0;
+  os_printf("%s", data);
+  if(parse_http_request(data, &len, &method, endpoint, &max_endpoint_len, &version, NULL, 0, 0, 0)) {
     os_printf("error parsing method!\n");
   }
   os_printf("method %u\n", method);
-  char endpoint[100] = {0};
-  // if(parse_endpoint(data, len, &cursor, endpoint, 99) {
-  //   os_printf("error parsing endpoint\n");
-  // }
+  os_printf("endpoint: '%s'\n", endpoint);
+  os_printf("version %u\n", version);
 }
 
 void ICACHE_FLASH_ATTR sent_callback(void* arg) {
