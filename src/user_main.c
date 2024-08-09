@@ -25,12 +25,14 @@
 // (PERIOD * 1000 / 45)
 #define MAX_DUTY (PERIOD * 1000 / 45)
 #define RGB_TRANSITION_TIMER 50
-#define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY * 0.0004)
+#define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY * 0.0002)
 
 #define WEBSERVER_PORT 80
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
+uint32_t rgb_values[3] = {0};
+static int8_t directions[3] = {1, 1, 1};
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -87,7 +89,6 @@ void ICACHE_FLASH_ATTR user_spi_flash_dio_to_qio_pre_init(void) {}
 
 void ICACHE_FLASH_ATTR rgb_transition(void *arg)
 {
-  static int8_t directions[3] = {1, 1, 1};
 
   os_timer_disarm(&ptimer);
   // if(wifi_station_get_connect_status() != STATION_GOT_IP) {
@@ -99,24 +100,38 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   //   return;
   // }
 
-  for(uint8_t channel = 0; channel < sizeof(rgb_duties)/sizeof(rgb_duties[0]); channel++) {
+  for(uint8_t channel = 0; channel < 3; channel++) {
+    if(!directions[channel]) continue;
     rgb_duties[channel] += directions[channel] * PWM_STEP;
-    if(rgb_duties[channel] >= MAX_DUTY) {
-      directions[channel] = -directions[channel];
-      rgb_duties[channel] = MAX_DUTY - 1;
-    } else if(rgb_duties[channel] <= 0) {
-      directions[channel] = -directions[channel];
-      rgb_duties[channel] = 1;
+    if(directions[channel] == 1) {
+      if(rgb_duties[channel] >= rgb_values[channel]) {
+        rgb_duties[channel] = rgb_values[channel];
+      }
+    } else if(directions[channel] == -1) {
+      if(rgb_duties[channel] <= rgb_values[channel]) {
+        rgb_duties[channel] = rgb_values[channel];
+      }
     }
+    // rgb_duties[channel] = rgb_values[channel];
+    // if(directions[channel] && rgb_duties[channel])
+    // if(rgb_duties[channel] >= MAX_DUTY) {
+    //   directions[channel] = -directions[channel];
+    //   rgb_duties[channel] = MAX_DUTY - 1;
+    // } else if(rgb_duties[channel] <= 0) {
+    //   directions[channel] = -directions[channel];
+    //   rgb_duties[channel] = 1;
+    // }
     pwm_set_duty(rgb_duties[channel], channel);
   }
   pwm_start();
 
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
-  os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
+  os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
 
 void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
+
+  os_timer_disarm(&ptimer);
   char* method = NULL;
   uint8_t method_len = 0;
   char* path = NULL;
@@ -145,7 +160,6 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
   state.stack[0] = '[';
   state.depth++;
   state.vtype = 0;
-  uint8_t rgb_values[3] = {0};
   int type = jsonparse_get_type(&state);
   os_printf("data: %s\n", data);
   if(( type = jsonparse_next(&state)) != JSON_TYPE_ARRAY) {
@@ -156,7 +170,9 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     os_printf("not int for red\n");
     goto error;
   }
-  rgb_values[0] = jsonparse_get_value_as_int(&state);
+  uint32_t new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
+  directions[0] = new_rgb_value > rgb_values[0] ? 1 : -1;
+  rgb_values[0] = new_rgb_value;
   if(( type = jsonparse_next(&state)) != ',') {
     os_printf("no comma after red\n");
     goto error;
@@ -165,7 +181,9 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     os_printf("not int for green\n");
     goto error;
   }
-  rgb_values[1] = jsonparse_get_value_as_int(&state);
+  new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
+  directions[1] = new_rgb_value > rgb_values[1] ? 1 : -1;
+  rgb_values[1] = new_rgb_value;
   if(( type = jsonparse_next(&state)) != ',') {
     os_printf("no comma after green\n");
     goto error;
@@ -174,7 +192,9 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     os_printf("not int for blue\n");
     goto error;
   }
-  rgb_values[2] = jsonparse_get_value_as_int(&state);
+  new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
+  directions[2] = new_rgb_value > rgb_values[2] ? 1 : -1;
+  rgb_values[2] = new_rgb_value;
   os_printf("r: %u, g: %u, b: %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
 
 
@@ -191,6 +211,8 @@ done:
   os_printf("method %c\n", *method);
   os_printf("endpoint: '%c'\n", *path);
   os_printf("version %u\n", version);
+  os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
+  os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
 
 void ICACHE_FLASH_ATTR sent_callback(void* arg) {
