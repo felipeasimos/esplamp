@@ -1,0 +1,3 @@
+[submodule "lib/minhttp"]
+	path = lib/minhttp
+	url = https://github.com/felipeasimos/minhttp.git

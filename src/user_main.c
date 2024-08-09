@@ -109,23 +109,27 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   }
   pwm_start();
 
-  // os_printf("#%u %u %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
 
 void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
-  unsigned short cursor = 0;
-  enum HTTP_METHOD method = 0;
-  unsigned short max_endpoint_len = 99;
-  char endpoint[100] = {0};
-  enum HTTP_VERSION version = 0;
-  os_printf("%s", data);
-  if(parse_http_request(data, &len, &method, endpoint, &max_endpoint_len, &version, NULL, 0, 0, 0)) {
+  char* method = NULL;
+  uint8_t method_len = 0;
+  char* path = NULL;
+  uint32_t path_len = 0;
+  mh_version version;
+  if( (data = mh_parse_request_first_line(data, data + len, &method, &method_len, &path, &path_len, &version)) == NULL ) {
     os_printf("error parsing method!\n");
+    return;
   }
-  os_printf("method %u\n", method);
-  os_printf("endpoint: '%s'\n", endpoint);
+  char* response = "HTTP/1.1 200 OK\r\nHost: example.com\r\nCookie: \r\nContent-Length: 5\r\n\r\nHello";
+  if(espconn_send(arg, (uint8_t*)response, strlen(response))) {
+    os_printf("error sending data!\n");
+    return;
+  }
+  os_printf("method %c\n", *method);
+  os_printf("endpoint: '%c'\n", *path);
   os_printf("version %u\n", version);
 }
 
@@ -170,13 +174,13 @@ void ICACHE_FLASH_ATTR block_for_wifi(void) {
     // os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
 
-void ICACHE_FLASH_ATTR user_main() {
-
-    // block until wifi is connected
-    os_timer_disarm(&ptimer);
-    os_timer_setfn(&ptimer, (os_timer_func_t *)block_for_wifi, NULL);
-    os_timer_arm(&ptimer, 1000, 1);
-}
+// void ICACHE_FLASH_ATTR user_main() {
+//
+//     // block until wifi is connected
+//     os_timer_disarm(&ptimer);
+//     os_timer_setfn(&ptimer, (os_timer_func_t *)block_for_wifi, NULL);
+//     os_timer_arm(&ptimer, 1000, 1);
+// }
 
 void ICACHE_FLASH_ATTR user_init(void)
 {
