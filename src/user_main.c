@@ -31,8 +31,9 @@
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
-uint32_t rgb_values[3] = {0};
+static uint32_t rgb_values[3] = {0};
 static int8_t directions[3] = {1, 1, 1};
+static uint32_t pwm_step = PWM_STEP;
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -102,7 +103,12 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
 
   for(uint8_t channel = 0; channel < 3; channel++) {
     if(!directions[channel]) continue;
-    rgb_duties[channel] += directions[channel] * PWM_STEP;
+    uint32_t new_rgb_value = rgb_duties[channel] + directions[channel] * pwm_step;
+    if(directions[channel] == -1 && new_rgb_value > rgb_duties[channel]) {
+      rgb_duties[channel] = rgb_values[channel];
+      continue;
+    }
+    rgb_duties[channel] = new_rgb_value;
     if(directions[channel] == 1) {
       if(rgb_duties[channel] >= rgb_values[channel]) {
         rgb_duties[channel] = rgb_values[channel];
@@ -124,6 +130,8 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
     pwm_set_duty(rgb_duties[channel], channel);
   }
   pwm_start();
+
+  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);

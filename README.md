@@ -17,9 +17,7 @@ A simple esp8266 rgb lamp controllable by an API.
 
 - [x] Change colors with PWM
 - [x] Connect to wifi
-- [ ] Accept TCP connection
-- [ ] Respond TCP connection
-- [ ] Simple HTTP parser
-    - [ ] Get request method
+- [x] Accept TCP connection
+- [x] Respond TCP connection
 - [ ] Optional `POST` parameters
     - [ ] duration of fade effect to new RGB color
