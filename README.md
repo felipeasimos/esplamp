@@ -21,3 +21,4 @@ A simple esp8266 rgb lamp controllable by an API.
 - [x] Respond TCP connection
 - [ ] Optional `POST` parameters
     - [ ] duration of fade effect to new RGB color
+- [ ] Graceful request shutdown and response

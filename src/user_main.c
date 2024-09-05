@@ -22,10 +22,9 @@
 #define STR(x) STRINGIFY(x)
 
 #define PERIOD 10000
-// (PERIOD * 1000 / 45)
 #define MAX_DUTY (PERIOD * 1000 / 45)
 #define RGB_TRANSITION_TIMER 50
-#define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY * 0.0002)
+#define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY)/5000
 
 #define WEBSERVER_PORT 80
 
@@ -118,20 +117,11 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
         rgb_duties[channel] = rgb_values[channel];
       }
     }
-    // rgb_duties[channel] = rgb_values[channel];
-    // if(directions[channel] && rgb_duties[channel])
-    // if(rgb_duties[channel] >= MAX_DUTY) {
-    //   directions[channel] = -directions[channel];
-    //   rgb_duties[channel] = MAX_DUTY - 1;
-    // } else if(rgb_duties[channel] <= 0) {
-    //   directions[channel] = -directions[channel];
-    //   rgb_duties[channel] = 1;
-    // }
     pwm_set_duty(rgb_duties[channel], channel);
   }
   pwm_start();
 
-  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
+  // os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
@@ -145,8 +135,8 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
   char* path = NULL;
   uint32_t path_len = 0;
   mh_version version;
-  char* response = "HTTP/1.1 200 OK\r\n\n\r\n";
-  char* badresponse = "HTTP/1.1 404 OK\r\n\n\r\n";
+  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+  char* badresponse = "HTTP/1.1 404 Bad Request\r\nContent-Length: 0\r\n\r\n";
   char* data_end = data + len;
   if( (data = mh_parse_request_first_line(data, data_end, &method, &method_len, &path, &path_len, &version)) == NULL ) {
     os_printf("error parsing first line!\n");
@@ -165,60 +155,45 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
 
   struct jsonparse_state state;
   jsonparse_setup(&state, data, data_end - data);
-  state.stack[0] = '[';
-  state.depth++;
-  state.vtype = 0;
-  int type = jsonparse_get_type(&state);
-  os_printf("data: %s\n", data);
-  if(( type = jsonparse_next(&state)) != JSON_TYPE_ARRAY) {
-    os_printf("not array\n");
+  int type = 0;
+  while(( type = jsonparse_next(&state)) != 0) {
+    if(type == JSON_TYPE_PAIR_NAME) {
+      if(jsonparse_strcmp_value(&state, "pwm_step") == 0) {
+        if((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
+          goto error;
+        }
+        pwm_step = jsonparse_get_value_as_int(&state) * PWM_STEP / 100;
+      } else if(jsonparse_strcmp_value(&state, "rgb") == 0) {
+        if(((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_ARRAY)) {
+          goto error;
+        }
+        int i = 0;
+        while((type = jsonparse_next(&state)) == JSON_TYPE_NUMBER && i < 3) {
+          uint32_t new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
+          directions[i] = new_rgb_value > rgb_values[i] ? 1 : -1;
+          rgb_values[i] = new_rgb_value;
+          i++;
+          if((type = jsonparse_next(&state)) != ',') break;
+        }
+        if(i < 3 ) {
+          goto error;
+        }
+        os_printf("r: %u, g: %u, b: %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
+      }
+    }
+  }
+  if(espconn_send(arg, (uint8_t*)okresponse, os_strlen(okresponse))) {
     goto error;
   }
-  if(( type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
-    os_printf("not int for red\n");
-    goto error;
-  }
-  uint32_t new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
-  directions[0] = new_rgb_value > rgb_values[0] ? 1 : -1;
-  rgb_values[0] = new_rgb_value;
-  if(( type = jsonparse_next(&state)) != ',') {
-    os_printf("no comma after red\n");
-    goto error;
-  }
-  if(( type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
-    os_printf("not int for green\n");
-    goto error;
-  }
-  new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
-  directions[1] = new_rgb_value > rgb_values[1] ? 1 : -1;
-  rgb_values[1] = new_rgb_value;
-  if(( type = jsonparse_next(&state)) != ',') {
-    os_printf("no comma after green\n");
-    goto error;
-  }
-  if(( type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
-    os_printf("not int for blue\n");
-    goto error;
-  }
-  new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
-  directions[2] = new_rgb_value > rgb_values[2] ? 1 : -1;
-  rgb_values[2] = new_rgb_value;
-  os_printf("r: %u, g: %u, b: %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
-
-
-  if(espconn_send(arg, (uint8_t*)response, os_strlen(response))) {
-    goto error;
-  }
+  goto done;
 error:
-  os_printf("type: %u\n", type);
+  os_printf("ERROR\ntype: %c\n", type);
   if(type == 0) {
     os_printf("json error: %u\n", state.error);
   }
   espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
+  return;
 done:
-  os_printf("method %c\n", *method);
-  os_printf("endpoint: '%c'\n", *path);
-  os_printf("version %u\n", version);
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
