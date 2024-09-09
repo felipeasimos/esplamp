@@ -91,14 +91,6 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
 {
 
   os_timer_disarm(&ptimer);
-  // if(wifi_station_get_connect_status() != STATION_GOT_IP) {
-  //   os_printf(".");
-  //   wifi_station_disconnect();
-  //   wifi_station_connect();
-  //   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
-  //   os_timer_arm(&ptimer, 1000, 1);
-  //   return;
-  // }
 
   for(uint8_t channel = 0; channel < 3; channel++) {
     if(!directions[channel]) continue;
@@ -121,51 +113,26 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   }
   pwm_start();
 
-  // os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
+  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
 
-void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
-
-  os_timer_disarm(&ptimer);
-  char* method = NULL;
-  uint8_t method_len = 0;
-  char* path = NULL;
-  uint32_t path_len = 0;
-  mh_version version;
-  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
-  char* badresponse = "HTTP/1.1 404 Bad Request\r\nContent-Length: 0\r\n\r\n";
-  char* data_end = data + len;
-  if( (data = mh_parse_request_first_line(data, data_end, &method, &method_len, &path, &path_len, &version)) == NULL ) {
-    os_printf("error parsing first line!\n");
-    goto error;
-  }
-  mh_header headers[2] = {0};
-  headers[0].header_key_begin = "Content-Length";
-  headers[0].header_key_len = os_strlen("Content-Length");
-  headers[1].header_key_begin = "Content-Type";
-  headers[1].header_key_len = os_strlen("Content-Type");
-
-  if( (data = mh_parse_headers_set(data, data_end, headers, 2)) == NULL) {
-    os_printf("error parsing headers!\n");
-    goto error;
-  }
-
+uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short len) {
   struct jsonparse_state state;
-  jsonparse_setup(&state, data, data_end - data);
+  jsonparse_setup(&state, data, len);
   int type = 0;
   while(( type = jsonparse_next(&state)) != 0) {
     if(type == JSON_TYPE_PAIR_NAME) {
       if(jsonparse_strcmp_value(&state, "pwm_step") == 0) {
         if((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
-          goto error;
+          return 0;
         }
         pwm_step = jsonparse_get_value_as_int(&state) * PWM_STEP / 100;
       } else if(jsonparse_strcmp_value(&state, "rgb") == 0) {
         if(((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_ARRAY)) {
-          goto error;
+          return 0;
         }
         int i = 0;
         while((type = jsonparse_next(&state)) == JSON_TYPE_NUMBER && i < 3) {
@@ -176,24 +143,68 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
           if((type = jsonparse_next(&state)) != ',') break;
         }
         if(i < 3 ) {
-          goto error;
+          return 0;
         }
-        os_printf("r: %u, g: %u, b: %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
+        os_printf("rgb set: %u %u %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
       }
     }
   }
-  if(espconn_send(arg, (uint8_t*)okresponse, os_strlen(okresponse))) {
+  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+  if(espconn_send(espconn, (uint8_t*)"", os_strlen(okresponse))) {
+    return 0;
+  }
+  return 1;
+}
+
+uint8_t ICACHE_FLASH_ATTR handle_get() {
+  uint32_t pwm_step_save = pwm_step;
+  uint32_t content_length = 28;
+  for(uint8_t i = 0; i < 3; i++) {
+    content_length += (rgb_values[i] > 9) + (rgb_values[i] > 99);
+  }
+  return 1;
+}
+
+void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
+
+  os_printf("recv_callback\n");
+  os_timer_disarm(&ptimer);
+  char* method = NULL;
+  uint8_t method_len = 0;
+  char* badresponse = "HTTP/1.1 404 Bad Request\r\nContent-Length: 0\r\n\r\n";
+  char* data_end = data + len;
+  if( (data = mh_parse_request_first_line(data, data_end, &method, &method_len, NULL, NULL, NULL)) == NULL ) {
+    os_printf("error parsing first line!\n");
     goto error;
+  }
+  if( (data = mh_parse_headers_set(data, data_end, NULL, 0)) == NULL) {
+    os_printf("error parsing headers!\n");
+    goto error;
+  }
+
+  len = data_end - data;
+  switch(*method) {
+    case 'G': {
+      uint8_t res = handle_get();
+      if(!res) goto error;
+      break;
+    }
+    case 'P': {
+      uint8_t res = handle_post(arg, data, len);
+      os_printf("post response: %u\n", res);
+      if(!res) goto error;
+      break;
+    }
+    default: {
+      goto error;
+    }
   }
   goto done;
 error:
-  os_printf("ERROR\ntype: %c\n", type);
-  if(type == 0) {
-    os_printf("json error: %u\n", state.error);
-  }
   espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
   return;
 done:
+  os_printf("setting timer again\n");
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
@@ -233,8 +244,8 @@ void ICACHE_FLASH_ATTR block_for_wifi(void) {
       return;
     }
     espconn_regist_connectcb(&espconn, connect_callback);
-    os_printf("espconn_accept response: %u\n", espconn_accept(&espconn));
 
+    os_printf("espconn_accept response: %u\n", espconn_accept(&espconn));
     os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
     os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
