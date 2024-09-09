@@ -113,7 +113,7 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   }
   pwm_start();
 
-  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
+  // os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
@@ -191,7 +191,6 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     }
     case 'P': {
       uint8_t res = handle_post(arg, data, len);
-      os_printf("post response: %u\n", res);
       if(!res) goto error;
       break;
     }
@@ -204,7 +203,6 @@ error:
   espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
   return;
 done:
-  os_printf("setting timer again\n");
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
