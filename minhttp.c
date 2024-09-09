@@ -46,7 +46,7 @@ static const char *token_char_map = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\
                                     "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
 static inline char* _mh_parse_path(char* data, char* data_end, char** string, uint32_t* string_len) {
-  char* limit = *string_len ? MIN(data_end, data + *string_len) : data_end;
+  char* limit = string_len && *string_len ? MIN(data_end, data + *string_len) : data_end;
   if(likely(string)) *string = data;
   for(; likely(data < limit && *data != ' ' && *data != '\t'); data++);
   if(likely(string_len)) *string_len = data - *string;
@@ -54,7 +54,7 @@ static inline char* _mh_parse_path(char* data, char* data_end, char** string, ui
 }
 
 static inline char* _mh_parse_method(char* data, char* data_end, char** method, uint8_t* method_len) {
-  char* limit = *method_len ? MIN(data_end, data + *method_len) : data_end;
+  char* limit = method_len && *method_len ? MIN(data_end, data + *method_len) : data_end;
   if(likely(method)) *method = data;
   for(; likely(data < limit && *data != ' ' && *data != '\t'); data++) {
     if(unlikely(!token_char_map[*data])) return NULL;
@@ -217,6 +217,7 @@ static inline uint8_t str_is_equal(char* str1, uint16_t len1, char* str2, uint16
   }
   return 1;
 }
+
 char* mh_parse_headers_set(char* data, char* data_end, mh_header* headers, uint32_t num_headers) {
   uint32_t num_headers_to_parse = num_headers;
   char* header_key_begin = NULL;
