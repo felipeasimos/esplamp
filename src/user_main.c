@@ -24,9 +24,12 @@
 #define PERIOD 10000
 #define MAX_DUTY (PERIOD * 1000 / 45)
 #define RGB_TRANSITION_TIMER 50
-#define PWM_STEP (RGB_TRANSITION_TIMER * MAX_DUTY)/5000
+#define PWM_STEP ((RGB_TRANSITION_TIMER * MAX_DUTY)/5000)
+#define STRLEN(s) ((sizeof(s)/sizeof(s[0])) - 1)
 
 #define WEBSERVER_PORT 80
+
+static const char content_length[] = "Content-Length";
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
@@ -119,51 +122,54 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
 
-uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short len) {
-  struct jsonparse_state state;
-  jsonparse_setup(&state, data, len);
-  int type = 0;
-  while(( type = jsonparse_next(&state)) != 0) {
-    if(type == JSON_TYPE_PAIR_NAME) {
-      if(jsonparse_strcmp_value(&state, "pwm_step") == 0) {
-        if((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_NUMBER) {
-          return 0;
-        }
-        pwm_step = jsonparse_get_value_as_int(&state) * PWM_STEP / 100;
-      } else if(jsonparse_strcmp_value(&state, "rgb") == 0) {
-        if(((type = jsonparse_next(&state)) != JSON_TYPE_PAIR || (type = jsonparse_next(&state)) != JSON_TYPE_ARRAY)) {
-          return 0;
-        }
-        int i = 0;
-        while((type = jsonparse_next(&state)) == JSON_TYPE_NUMBER && i < 3) {
-          uint32_t new_rgb_value = (jsonparse_get_value_as_int(&state) * MAX_DUTY) / 100;
-          directions[i] = new_rgb_value > rgb_values[i] ? 1 : -1;
-          rgb_values[i] = new_rgb_value;
-          i++;
-          if((type = jsonparse_next(&state)) != ',') break;
-        }
-        if(i < 3 ) {
-          return 0;
-        }
-        os_printf("rgb set: %u %u %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
-      }
-    }
+uint8_t str_to_int(char* str, uint8_t len) {
+  uint8_t sum = 0;
+  for(uint8_t i = 0; i < len; i++) {
+    sum = (sum * 10) + (str[i] - '0');
   }
-  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
-  if(espconn_send(espconn, (uint8_t*)"", os_strlen(okresponse))) {
+  return sum;
+}
+
+void int_to_str_with_len_3(char* str, uint8_t n) {
+  os_printf("int to str: %d\n", n);
+  if(n >= 100) {
+    str[0] = '1';
+    str[1] = '0';
+    str[2] = '0';
+    return;
+  }
+  str[0] = '0';
+  str[1] = (n / 10) + '0';
+  str[2] = (n % 10) + '0';
+  return;
+}
+
+uint8_t ICACHE_FLASH_ATTR handle_get(void* espconn) {
+  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\n000000000000";
+  int_to_str_with_len_3(&okresponse[39], (pwm_step * 100) / PWM_STEP);
+  int_to_str_with_len_3(&okresponse[42], (rgb_values[0] * 100) / MAX_DUTY);
+  int_to_str_with_len_3(&okresponse[45], (rgb_values[1] * 100) / MAX_DUTY);
+  int_to_str_with_len_3(&okresponse[48], (rgb_values[2] * 100) / MAX_DUTY);
+  if(espconn_send(espconn, (uint8_t*)okresponse, 51)) {
     return 0;
   }
   return 1;
 }
 
-uint8_t ICACHE_FLASH_ATTR handle_get() {
-  uint32_t pwm_step_save = pwm_step;
-  uint32_t content_length = 28;
+uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short len) {
+  if(len != 12) return 0;
+  pwm_step = (str_to_int(data, 3) * PWM_STEP) / 100;
   for(uint8_t i = 0; i < 3; i++) {
-    content_length += (rgb_values[i] > 9) + (rgb_values[i] > 99);
+      uint32_t new_rgb_value = str_to_int(&data[(i * 3) + 3], 3) * MAX_DUTY / 100;
+      directions[i] = new_rgb_value > rgb_values[i] ? 1 : -1;
+      rgb_values[i] = new_rgb_value;
   }
-  return 1;
+
+  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
+
+  return handle_get(espconn);
 }
+
 
 void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
 
@@ -177,19 +183,27 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     os_printf("error parsing first line!\n");
     goto error;
   }
-  if( (data = mh_parse_headers_set(data, data_end, NULL, 0)) == NULL) {
+  mh_header header = {
+    .header_key_begin = (char*)content_length,
+    .header_key_len = STRLEN(content_length),
+    .header_value_len = 0,
+    .header_value_begin = 0
+  };
+  if( (data = mh_parse_headers_set(data, data_end, &header, 1)) == NULL) {
     os_printf("error parsing headers!\n");
     goto error;
   }
+  uint8_t payload_size = str_to_int(header.header_value_begin, header.header_value_len);
 
   len = data_end - data;
   switch(*method) {
     case 'G': {
-      uint8_t res = handle_get();
+      uint8_t res = handle_get(arg);
       if(!res) goto error;
       break;
     }
     case 'P': {
+      if(payload_size != 12) goto error;
       uint8_t res = handle_post(arg, data, len);
       if(!res) goto error;
       break;
@@ -201,7 +215,6 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
   goto done;
 error:
   espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
-  return;
 done:
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
