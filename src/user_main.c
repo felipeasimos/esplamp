@@ -30,6 +30,7 @@
 #define WEBSERVER_PORT 80
 
 static const char content_length[] = "Content-Length";
+static const char content_type[] = "Content-Type";
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
@@ -130,37 +131,23 @@ uint8_t str_to_int(char* str, uint8_t len) {
   return sum;
 }
 
-void int_to_str_with_len_3(char* str, uint8_t n) {
-  os_printf("int to str: %d\n", n);
-  if(n >= 100) {
-    str[0] = '1';
-    str[1] = '0';
-    str[2] = '0';
-    return;
-  }
-  str[0] = '0';
-  str[1] = (n / 10) + '0';
-  str[2] = (n % 10) + '0';
-  return;
-}
-
 uint8_t ICACHE_FLASH_ATTR handle_get(void* espconn) {
-  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\n000000000000";
-  int_to_str_with_len_3(&okresponse[39], (pwm_step * 100) / PWM_STEP);
-  int_to_str_with_len_3(&okresponse[42], (rgb_values[0] * 100) / MAX_DUTY);
-  int_to_str_with_len_3(&okresponse[45], (rgb_values[1] * 100) / MAX_DUTY);
-  int_to_str_with_len_3(&okresponse[48], (rgb_values[2] * 100) / MAX_DUTY);
-  if(espconn_send(espconn, (uint8_t*)okresponse, 51)) {
+  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n\x00\x00\x00\x00";
+  okresponse[38] = (pwm_step * 100) / PWM_STEP;
+  okresponse[39] = (rgb_values[0] * 100) / MAX_DUTY;
+  okresponse[40] = (rgb_values[1] * 100) / MAX_DUTY;
+  okresponse[41] = (rgb_values[2] * 100) / MAX_DUTY;
+  if(espconn_send(espconn, (uint8_t*)okresponse, 42)) {
     return 0;
   }
   return 1;
 }
 
 uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short len) {
-  if(len != 12) return 0;
-  pwm_step = (str_to_int(data, 3) * PWM_STEP) / 100;
+  if(len != 4) return 0;
+  pwm_step = (data[0] * PWM_STEP) / 100;
   for(uint8_t i = 0; i < 3; i++) {
-      uint32_t new_rgb_value = str_to_int(&data[(i * 3) + 3], 3) * MAX_DUTY / 100;
+      uint32_t new_rgb_value = data[1 + i] * MAX_DUTY / 100;
       directions[i] = new_rgb_value > rgb_values[i] ? 1 : -1;
       rgb_values[i] = new_rgb_value;
   }
@@ -168,6 +155,13 @@ uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short 
   os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
   return handle_get(espconn);
+}
+
+int strequal(char* a, char* b, uint8_t n) {
+  for(uint8_t i = 0; i < n; i++) {
+    if(a[i] != b[i]) return 0;
+  }
+  return 1;
 }
 
 
@@ -183,17 +177,25 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
     os_printf("error parsing first line!\n");
     goto error;
   }
-  mh_header header = {
-    .header_key_begin = (char*)content_length,
-    .header_key_len = STRLEN(content_length),
-    .header_value_len = 0,
-    .header_value_begin = 0
+  mh_header headers[2] = {
+    {
+      .header_key_begin = (char*)content_length,
+      .header_key_len = STRLEN(content_length),
+      .header_value_len = 0,
+      .header_value_begin = 0
+    },
+    {
+      .header_key_begin = (char*)content_type,
+      .header_key_len = STRLEN(content_type),
+      .header_value_len = 0,
+      .header_value_begin = 0
+    }
   };
-  if( (data = mh_parse_headers_set(data, data_end, &header, 1)) == NULL) {
+  if( (data = mh_parse_headers_set(data, data_end, headers, 2)) == NULL) {
     os_printf("error parsing headers!\n");
     goto error;
   }
-  uint8_t payload_size = str_to_int(header.header_value_begin, header.header_value_len);
+  uint8_t payload_size = str_to_int(headers[0].header_value_begin, headers[0].header_value_len);
 
   len = data_end - data;
   switch(*method) {
@@ -203,7 +205,9 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
       break;
     }
     case 'P': {
-      if(payload_size != 12) goto error;
+      if(!strequal(headers[1].header_value_begin, "application/octet-stream", headers[1].header_value_len)) {
+        goto error;
+      }
       uint8_t res = handle_post(arg, data, len);
       if(!res) goto error;
       break;

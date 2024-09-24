@@ -13,6 +13,10 @@ A simple esp8266 rgb lamp controllable by an API.
     * `GET` -> get current RGB values
     * `POST` -> set new RGB values
 
+```
+curl -vvvvv  192.168.0.105 -H "Content-Type: application/octet-stream" -X POST --data-raw "$(echo -e 'd\x01\x01\x01')" -vv -o a
+```
+
 ### Roadmap
 
 - [x] Change colors with PWM
@@ -21,6 +25,6 @@ A simple esp8266 rgb lamp controllable by an API.
 - [x] Respond TCP connection
 - [x] Optional `POST` parameters
     - [x] duration of fade effect to new RGB color
-- [ ] `GET` `pwm_step` and `rgb`
-- [ ] return `pwm_step` and `rgb` in `POST`
+- [x] `GET` `pwm_step` and `rgb`
+- [x] return `pwm_step` and `rgb` in `POST`
 - [ ] Graceful request shutdown and response
