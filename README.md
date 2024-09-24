@@ -27,4 +27,3 @@ curl -vvvvv  192.168.0.105 -H "Content-Type: application/octet-stream" -X POST -
     - [x] duration of fade effect to new RGB color
 - [x] `GET` `pwm_step` and `rgb`
 - [x] return `pwm_step` and `rgb` in `POST`
-- [ ] Graceful request shutdown and response
