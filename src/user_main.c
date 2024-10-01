@@ -20,6 +20,7 @@
 
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
+#define MIN(a, b) (a < b ? a : b)
 
 #define PERIOD 10000
 #define MAX_DUTY (PERIOD * 1000 / 45)
@@ -28,15 +29,38 @@
 #define STRLEN(s) ((sizeof(s)/sizeof(s[0])) - 1)
 
 #define WEBSERVER_PORT 80
+#define DEVICE_DISCOVERY_PORT 12345
 
 static const char content_length[] = "Content-Length";
 static const char content_type[] = "Content-Type";
+static const char discovery_request[] = "whatstheesplampipagain?";
+static const char discovery_response[] = "openupitsme";
+static const char octet_stream_str[] = "application/octet-stream";
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
 static uint32_t rgb_values[3] = {0};
 static int8_t directions[3] = {1, 1, 1};
 static uint32_t pwm_step = PWM_STEP;
+
+static esp_tcp esptcp = {
+  .local_port = WEBSERVER_PORT
+};
+static struct espconn tcp_espconn = {
+  .type = ESPCONN_TCP,
+  .state = ESPCONN_NONE,
+  .proto.tcp = &esptcp,
+};
+
+static esp_udp espudp = {
+  .local_port = DEVICE_DISCOVERY_PORT
+};
+
+static struct espconn udp_espconn = {
+  .type = ESPCONN_UDP,
+  .state = ESPCONN_NONE,
+  .proto.udp = &espudp,
+};
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -159,15 +183,15 @@ uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short 
 
 int strequal(char* a, char* b, uint8_t n) {
   for(uint8_t i = 0; i < n; i++) {
-    if(a[i] != b[i]) return 0;
+    if(a[i] != b[i] || !a[i] || !b[i]) return 0;
   }
   return 1;
 }
 
 
-void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) {
+void ICACHE_FLASH_ATTR tcp_recv_callback(void* arg, char* data, unsigned short len) {
 
-  os_printf("recv_callback\n");
+  os_printf("tcp_recv_callback\n");
   os_timer_disarm(&ptimer);
   char* method = NULL;
   uint8_t method_len = 0;
@@ -205,7 +229,7 @@ void ICACHE_FLASH_ATTR recv_callback(void* arg, char* data, unsigned short len) 
       break;
     }
     case 'P': {
-      if(!strequal(headers[1].header_value_begin, "application/octet-stream", headers[1].header_value_len)) {
+      if(!strequal(headers[1].header_value_begin, (char*)octet_stream_str, MIN(headers[1].header_value_len, STRLEN(octet_stream_str)))) {
         goto error;
       }
       uint8_t res = handle_post(arg, data, len);
@@ -228,39 +252,54 @@ void ICACHE_FLASH_ATTR sent_callback(void* arg) {
   os_printf("sent cb\n");
 }
 
-void ICACHE_FLASH_ATTR disconnect_callback(void* arg) {
+void ICACHE_FLASH_ATTR tcp_disconnect_callback(void* arg) {
   os_printf("disconnect cb\n");
 }
 
-void ICACHE_FLASH_ATTR reconnect_callback(void* arg, int8_t err) {
+void ICACHE_FLASH_ATTR tcp_reconnect_callback(void* arg, int8_t err) {
   os_printf("reconnect cb\n");
 }
 
-void ICACHE_FLASH_ATTR connect_callback(void* arg) {
+void ICACHE_FLASH_ATTR tcp_connect_callback(void* arg) {
   os_printf("connect cb\n");
-  espconn_regist_recvcb(arg, recv_callback);
-  espconn_regist_reconcb(arg, reconnect_callback);
-  espconn_regist_disconcb(arg, disconnect_callback);
+}
+
+void ICACHE_FLASH_ATTR udp_recv_callback(void* espconn, char* data, unsigned short len) {
+  if( strequal(data, (char*)discovery_request, MIN(len, STRLEN(discovery_request))) ) {
+    uint8_t* remote_ip = ((struct espconn*)espconn)->proto.udp->remote_ip;
+    remote_ip[0] = 192;
+    remote_ip[1] = 168;
+    remote_ip[2] = 0;
+    remote_ip[3] = 255;
+    ((struct espconn*)espconn)->proto.udp->remote_port = DEVICE_DISCOVERY_PORT;
+    if(espconn_send(espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {
+      os_printf("failed to send udp response\n");
+    }
+    if(espconn_sendto(espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {
+      os_printf("failed to send udp response²\n");
+    }
+  }
 }
 
 void ICACHE_FLASH_ATTR block_for_wifi(void) {
-    static esp_tcp esptcp = {
-      .local_port = WEBSERVER_PORT
-    };
-    static struct espconn espconn = {
-      .type = ESPCONN_TCP,
-      .state = ESPCONN_NONE,
-      .proto.tcp = &esptcp,
-    };
     os_timer_disarm(&ptimer);
     if(wifi_station_get_connect_status() != STATION_GOT_IP) {
       os_timer_setfn(&ptimer, (os_timer_func_t *)block_for_wifi, NULL);
       os_timer_arm(&ptimer, 1000, 1);
       return;
     }
-    espconn_regist_connectcb(&espconn, connect_callback);
+    // tcp
+    espconn_regist_connectcb(&tcp_espconn, tcp_connect_callback);
+    espconn_regist_recvcb(&tcp_espconn, tcp_recv_callback);
+    espconn_regist_reconcb(&tcp_espconn, tcp_reconnect_callback);
+    espconn_regist_disconcb(&tcp_espconn, tcp_disconnect_callback);
 
-    os_printf("espconn_accept response: %u\n", espconn_accept(&espconn));
+    // udp
+    espconn_regist_recvcb(&udp_espconn, udp_recv_callback);
+    uint8_t res = espconn_create(&udp_espconn);
+    os_printf("espconn create = %d\n",res);
+
+    os_printf("espconn_accept response: %u\n", espconn_accept(&tcp_espconn));
     os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
     os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
 }
