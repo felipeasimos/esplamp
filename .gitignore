@@ -3,3 +3,6 @@
 compile_commands.json
 .env
 logs/
+app/compile_flags.txt
+app/.*
+app/build/
