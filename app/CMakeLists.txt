@@ -4,15 +4,14 @@ project(esplampapp VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
 # set(CMAKE_BUILD_TYPE Release)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Core Quick Qml QuickControls2 REQUIRED)
+find_package(Qt6 6.5 COMPONENTS Widgets Gui Core Quick Qml QuickControls2 REQUIRED)
 qt_standard_project_setup()
-add_subdirectory(src/app)
-
-# set(CMAKE_AUTORCC ON)
-# set(CMAKE_AUTOUIC ON)
-# set(CMAKE_AUTOMOC ON)
+add_subdirectory(src)
 
 ### custom commands
 set(MAIN_ACTIVITY "org.qtproject.example.esplamp/org.qtproject.qt.android.bindings.QtActivity")
