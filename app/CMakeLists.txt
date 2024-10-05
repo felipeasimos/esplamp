@@ -14,9 +14,9 @@ qt_standard_project_setup()
 add_subdirectory(src)
 
 ### custom commands
-set(MAIN_ACTIVITY "org.qtproject.example.esplamp/org.qtproject.qt.android.bindings.QtActivity")
-set(APK_PATH "${CMAKE_BINARY_DIR}/src/app/android-build/esplamp.apk")
-set(ANDROID_PACKAGE "org.qtproject.example.esplamp")
+set(MAIN_ACTIVITY "org.qtproject.example.esplampapp/org.qtproject.qt.android.bindings.QtActivity")
+set(APK_PATH "${CMAKE_BINARY_DIR}/src/app/android-build/esplampapp.apk")
+set(ANDROID_PACKAGE "org.qtproject.example.esplampapp")
 add_custom_command(
     OUTPUT launch_apk_command
     COMMAND adb shell am start -S -n ${MAIN_ACTIVITY}
