@@ -1,28 +1,18 @@
 import QtQuick
-import Qt.labs.folderlistmodel
 import QtQuick.Controls
+import esplamp 1.0
 
 ApplicationWindow {
     visible: true
-    Image {
-        id: triangle
-        source: "qrc:/qt/qml/esplamp/assets/images/logo_scaled.png"
+    Text {
+        text: "Hello world"
     }
-    ListView {
-        width: 200; height: 400
-
-        FolderListModel {
-            id: folderModel
-            folder: "qrc:/"
-            nameFilters: ["*"]
-        }
-
-        Component {
-            id: fileDelegate
-            Text { text: fileName }
-        }
-
-        model: folderModel
-        delegate: fileDelegate
+    Button {
+        text: "Connect"
+        onClicked: RGBController.doStuff()
     }
+    // Image {
+    //     id: triangle
+    //     source: "qrc:/qt/qml/esplamp/assets/images/logo_scaled.png"
+    // } 
 }
