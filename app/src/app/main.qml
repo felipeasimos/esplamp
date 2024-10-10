@@ -5,20 +5,36 @@ import esplamp 1.0
 
 ApplicationWindow {
     visible: true
-    RowLayout {
+    GridLayout {
+        rows: 1
+        flow: GridLayout.TopToBottom
+        Text {
+            id: logger
+            text: RGBController.lampAddress
+        }
+        Button {
+            text: "Find Lamp"
+            onClicked: RGBController.requestLampAddress()
+        }
         Text {
             text: RGBController.text
         }
         TextInput {
             id: inputField
             width: 200
-            text: "Enter new text"
+            text: "#000000"
             font.pixelSize: 18
         }
         Button {
-            text: "Connect"
+            text: "Set Color"
             onClicked: RGBController.changeText(inputField.text)
         }
+        // Timer {
+        //     interval: 500
+        //     running: RGController.lampAddressFound;
+        //     repeat: true;
+        //     onTriggered: RGBController.getLampAddress()
+        // }
     }
     // Image {
     //     id: triangle

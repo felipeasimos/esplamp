@@ -10,7 +10,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_COMPILE_COMMANDS ON)
 # set(CMAKE_BUILD_TYPE Release)
 
-find_package(Qt6 6.5 COMPONENTS Widgets Gui Core Quick Qml QuickControls2 REQUIRED)
+find_package(Qt6 6.5 COMPONENTS Widgets Gui Core Quick Qml QuickControls2 Network REQUIRED)
 qt_standard_project_setup()
 add_subdirectory(src)
 
