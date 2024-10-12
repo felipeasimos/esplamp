@@ -4,7 +4,6 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <qstringview.h>
-#include <stdint.h>
 #include <qhostaddress.h>
 #include <qtmetamacros.h>
 #include <QHostAddress>

@@ -11,6 +11,8 @@ qt_add_qml_module(
     SOURCES
         app/RGBController.h
         app/RGBController.cpp
+        app/DeviceDiscovery.h
+        app/DeviceDiscovery.cpp
     RESOURCES
         assets/images/logo_scaled.png
 )

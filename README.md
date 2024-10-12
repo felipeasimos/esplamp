@@ -27,4 +27,7 @@ curl -vvvvv  192.168.0.105 -H "Content-Type: application/octet-stream" -X POST -
     - [x] duration of fade effect to new RGB color
 - [x] `GET` `pwm_step` and `rgb`
 - [x] return `pwm_step` and `rgb` in `POST`
-- [ ] respond to discovery broadcast message
+- [x] respond to discovery broadcast message
+- [ ] Qt App
+    - [x] discover lamp ip
+    - [ ] change color

@@ -265,11 +265,12 @@ void ICACHE_FLASH_ATTR tcp_connect_callback(void* arg) {
 }
 
 void ICACHE_FLASH_ATTR udp_recv_callback(void* espconn, char* data, unsigned short len) {
+  os_printf("udp_recv cb\n");
   if( strequal(data, (char*)discovery_request, MIN(len, STRLEN(discovery_request))) ) {
     uint8_t* remote_ip = ((struct espconn*)espconn)->proto.udp->remote_ip;
-    remote_ip[0] = 192;
-    remote_ip[1] = 168;
-    remote_ip[2] = 0;
+    remote_ip[0] = 255;
+    remote_ip[1] = 255;
+    remote_ip[2] = 255;
     remote_ip[3] = 255;
     ((struct espconn*)espconn)->proto.udp->remote_port = DEVICE_DISCOVERY_PORT;
     if(espconn_send(espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {

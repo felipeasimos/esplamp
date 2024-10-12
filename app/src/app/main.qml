@@ -6,15 +6,15 @@ import esplamp 1.0
 ApplicationWindow {
     visible: true
     GridLayout {
-        rows: 1
+        rows: 7
         flow: GridLayout.TopToBottom
         Text {
             id: logger
-            text: RGBController.lampAddress
+            text: DeviceDiscovery.deviceAddressStr
         }
         Button {
             text: "Find Lamp"
-            onClicked: RGBController.requestLampAddress()
+            onClicked: DeviceDiscovery.requestAddress()
         }
         Text {
             text: RGBController.text
