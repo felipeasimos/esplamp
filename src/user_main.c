@@ -273,11 +273,8 @@ void ICACHE_FLASH_ATTR udp_recv_callback(void* espconn, char* data, unsigned sho
     remote_ip[2] = 255;
     remote_ip[3] = 255;
     ((struct espconn*)espconn)->proto.udp->remote_port = DEVICE_DISCOVERY_PORT;
-    if(espconn_send(espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {
-      os_printf("failed to send udp response\n");
-    }
     if(espconn_sendto(espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {
-      os_printf("failed to send udp response²\n");
+      os_printf("failed to send udp response\n");
     }
   }
 }

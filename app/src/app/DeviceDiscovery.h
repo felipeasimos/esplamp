@@ -19,7 +19,9 @@ class DeviceDiscovery : public QObject {
     Q_PROPERTY(QString deviceAddressStr READ deviceAddressStr NOTIFY deviceAddressChanged)
 public:
     explicit DeviceDiscovery(QObject *parent = nullptr) : 
-        QObject(parent) { }
+        QObject(parent) { 
+        setupDeviceDiscoveryServer();
+    }
 
     QString deviceAddressStr() const;
     void processPendingDatagrams();
@@ -28,9 +30,8 @@ public:
     signals:
         void deviceAddressChanged();
 private:
+    void setupDeviceDiscoveryServer();
     QHostAddress deviceAddress;
-
-    quint32 retryAddressValidationSecs = 15;
 
     QUdpSocket* udpSocket = nullptr;
 
