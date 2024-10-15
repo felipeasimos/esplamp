@@ -15,7 +15,6 @@
 class DeviceDiscovery : public QObject {
     Q_OBJECT
     QML_ELEMENT
-    QML_SINGLETON
     Q_PROPERTY(QString deviceAddressStr READ deviceAddressStr NOTIFY deviceAddressChanged)
 public:
     explicit DeviceDiscovery(QObject *parent = nullptr) : 
@@ -24,6 +23,7 @@ public:
     }
 
     QString deviceAddressStr() const;
+
     void processPendingDatagrams();
 
     Q_INVOKABLE void requestAddress();

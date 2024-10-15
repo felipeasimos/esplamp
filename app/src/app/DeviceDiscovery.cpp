@@ -6,7 +6,7 @@
 
 QString DeviceDiscovery::deviceAddressStr() const {
     if(deviceAddress == QHostAddress::Null) {
-        return "no address found";
+        return "";
     }
     return deviceAddress.toString();
 }
@@ -40,7 +40,6 @@ void DeviceDiscovery::processPendingDatagrams() {
     while(udpSocket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = udpSocket->receiveDatagram();
         if (datagram.data() == this->discoveryResponseContent) {
-            qDebug() << "this should have worked\n";
             this->deviceAddress = datagram.senderAddress();
             emit deviceAddressChanged();
         }

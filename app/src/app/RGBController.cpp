@@ -5,56 +5,38 @@
 #include <QtNetwork/QUdpSocket>
 #include <QObject>
 #include <QtNetwork/QNetworkDatagram>
+#include <QString>
 
-void RGBController::setText(const QString& newText) {
-    if (m_text != newText) {
-        m_text = newText;
-        qDebug() << "Hello World!";
-        emit textChanged();
+
+QString toZeroPaddedStr(quint32 n, quint32 pad = 2, quint32 base = 16) {
+    return QStringLiteral("%1")
+        .arg(n, pad, base, QLatin1Char('0'));
+}
+
+QString RGBController::colorStr() const {
+    return QStringLiteral("#") +
+    toZeroPaddedStr(color.red()) +
+    toZeroPaddedStr(color.green()) + 
+    toZeroPaddedStr(color.blue());
+}
+
+void RGBController::setColor(const QColor& newColor) {
+    if (color != newColor) {
+        color = newColor;
+        emit colorChanged();
     }
 }
 
-void RGBController::setLampAddressFound(const bool found) {
-    if(!m_lampAddressFound) {
-        m_lampAddressFound = found;
-        emit lampAddressFoundChanged();
-    }
-}
+void RGBController::changeColor(const QString& newColorStr) {
+    if(!newColorStr.startsWith("#") || newColorStr.trimmed().length() != 7) return;
 
-void RGBController::requestLampAddress() {
-    if (this->lampAddressFound()) {
-        return;
-    }
-    this->udpSocket = new QUdpSocket(this);
-    this->udpSocket->bind(QHostAddress::AnyIPv4, this->lampPort);
-    this->udpSocket->writeDatagram(
-        this->discoveryRequestContent,
-        QHostAddress::Broadcast,
-        this->lampPort
-    );
-    qDebug() << "datagram sent\n";
-    qDebug() << "socket binded\n";
+    bool valid;
+    quint32 red = newColorStr.sliced(1, 2).toUInt(&valid, 16);
+    if(!valid) return;
+    quint32 green = newColorStr.sliced(3, 2).toUInt(&valid, 16);
+    if(!valid) return;
+    quint32 blue = newColorStr.sliced(5, 2).toUInt(&valid, 16);
+    if(!valid) return;
 
-    QObject::connect(
-        udpSocket,
-        &QUdpSocket::readyRead,
-        this,
-        [=]() {
-            while(udpSocket->hasPendingDatagrams()) {
-                QNetworkDatagram datagram = udpSocket->receiveDatagram();
-                if (datagram.data() == this->discoveryResponseContent) {
-                    this->lampAddress = datagram.senderAddress();
-                    this->setLampAddressFound(true);
-                    qDebug() << this->lampAddress;
-                }
-            }
-            qDebug() << "stopped listening\n";
-        }
-    );
-
-    qDebug() << "waiting for response\n";
-}
-
-void RGBController::changeText(const QString& newText) {
-    setText(newText);
+    setColor(QColor::fromRgb(red, green, blue));
 }
