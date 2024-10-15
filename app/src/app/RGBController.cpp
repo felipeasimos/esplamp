@@ -20,10 +20,21 @@ QString RGBController::colorStr() const {
     toZeroPaddedStr(color.blue());
 }
 
+QHostAddress RGBController::lampAddress() const {
+    return m_lampAddress;
+}
+
 void RGBController::setColor(const QColor& newColor) {
     if (color != newColor) {
         color = newColor;
         emit colorChanged();
+    }
+}
+
+void RGBController::setLampAddress(const QHostAddress& lampAddress) {
+    if (m_lampAddress != lampAddress) {
+        m_lampAddress = lampAddress;
+        emit lampAddressChanged();
     }
 }
 

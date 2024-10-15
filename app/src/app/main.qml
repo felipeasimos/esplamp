@@ -10,11 +10,12 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         rows: 7
         flow: GridLayout.TopToBottom
-        RGBController {
-            id: rgbController
-        }
         DeviceDiscovery {
             id: deviceDiscovery
+        }
+        RGBController {
+            id: rgbController
+            lampAddress: deviceDiscovery.deviceAddress
         }
         Text {
             id: logger

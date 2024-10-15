@@ -15,14 +15,18 @@
 class DeviceDiscovery : public QObject {
     Q_OBJECT
     QML_ELEMENT
+    Q_PROPERTY(QHostAddress deviceAddress READ deviceAddress WRITE setDeviceAddress NOTIFY deviceAddressChanged)
     Q_PROPERTY(QString deviceAddressStr READ deviceAddressStr NOTIFY deviceAddressChanged)
 public:
     explicit DeviceDiscovery(QObject *parent = nullptr) : 
-        QObject(parent) { 
+        QObject(parent),
+        m_deviceAddress(QHostAddress::Null) { 
         setupDeviceDiscoveryServer();
     }
 
     QString deviceAddressStr() const;
+    QHostAddress deviceAddress() const;
+    void setDeviceAddress(const QHostAddress&);
 
     void processPendingDatagrams();
 
@@ -31,7 +35,7 @@ public:
         void deviceAddressChanged();
 private:
     void setupDeviceDiscoveryServer();
-    QHostAddress deviceAddress;
+    QHostAddress m_deviceAddress;
 
     QUdpSocket* udpSocket = nullptr;
 

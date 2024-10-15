@@ -5,10 +5,18 @@
 #include <QNetworkDatagram>
 
 QString DeviceDiscovery::deviceAddressStr() const {
-    if(deviceAddress == QHostAddress::Null) {
-        return "";
+    return m_deviceAddress.toString();
+}
+
+QHostAddress DeviceDiscovery::deviceAddress() const {
+    return m_deviceAddress;
+}
+
+void DeviceDiscovery::setDeviceAddress(const QHostAddress& deviceAddress) {
+    if (m_deviceAddress != deviceAddress) {
+        m_deviceAddress = deviceAddress;
+        emit deviceAddressChanged();
     }
-    return deviceAddress.toString();
 }
 
 void DeviceDiscovery::requestAddress() {
@@ -40,8 +48,7 @@ void DeviceDiscovery::processPendingDatagrams() {
     while(udpSocket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = udpSocket->receiveDatagram();
         if (datagram.data() == this->discoveryResponseContent) {
-            this->deviceAddress = datagram.senderAddress();
-            emit deviceAddressChanged();
+            setDeviceAddress(datagram.senderAddress());
         }
     }
 }
