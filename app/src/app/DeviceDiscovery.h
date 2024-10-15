@@ -28,7 +28,6 @@ public:
     QHostAddress deviceAddress() const;
     void setDeviceAddress(const QHostAddress&);
 
-    void processPendingDatagrams();
 
     Q_INVOKABLE void requestAddress();
     signals:
@@ -38,10 +37,8 @@ private:
     QHostAddress m_deviceAddress;
 
     QUdpSocket* udpSocket = nullptr;
-
-    static const quint32 port = 12345;
-    const QByteArray discoveryRequestContent = QByteArrayLiteral("whatstheesplampipagain?");
-    const QByteArray discoveryResponseContent = QByteArrayLiteral("openupitsme");
+private slots:
+    void processPendingDatagrams();
 };
 
 #endif

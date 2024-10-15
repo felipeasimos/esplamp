@@ -9,7 +9,7 @@
 #include <qtmetamacros.h>
 #include <QHostAddress>
 #include <QNetworkInterface>
-#include <qudpsocket.h>
+#include <QTcpSocket>
 
 class RGBController : public QObject {
     Q_OBJECT
@@ -33,8 +33,18 @@ public:
         void colorChanged();
         void lampAddressChanged();
 private:
+    void setupTcpSocket();
+    void requestColor();
+
+    QTcpSocket* tcpSocket = nullptr;
     QColor color{0,0,0};
+    bool colorIsDirty = true;
     QHostAddress m_lampAddress;
+private slots:
+    void onConnected();
+    void onReadyRead();
+    void onDisconnected();
+    void onErrorOccurred();
 };
 
 #endif

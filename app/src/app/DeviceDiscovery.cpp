@@ -3,6 +3,7 @@
 #include <qudpsocket.h>
 #include <QObject>
 #include <QNetworkDatagram>
+#include "./consts.h"
 
 QString DeviceDiscovery::deviceAddressStr() const {
     return m_deviceAddress.toString();
@@ -24,9 +25,9 @@ void DeviceDiscovery::requestAddress() {
         udpSocket = new QUdpSocket{this};
     }
     udpSocket->writeDatagram(
-        this->discoveryRequestContent,
+        discoveryRequestContent,
         QHostAddress::Broadcast,
-        this->port
+        lampDiscoveryPort
     );
 
 }
@@ -35,7 +36,7 @@ void DeviceDiscovery::setupDeviceDiscoveryServer() {
     if(!udpSocket) {
         udpSocket = new QUdpSocket{this};
     }
-    udpSocket->bind(QHostAddress::Any, this->port);
+    udpSocket->bind(QHostAddress::Any, lampDiscoveryPort);
     connect(
         udpSocket,
         &QUdpSocket::readyRead,
@@ -47,7 +48,7 @@ void DeviceDiscovery::setupDeviceDiscoveryServer() {
 void DeviceDiscovery::processPendingDatagrams() {
     while(udpSocket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = udpSocket->receiveDatagram();
-        if (datagram.data() == this->discoveryResponseContent) {
+        if (datagram.data() == discoveryResponseContent) {
             setDeviceAddress(datagram.senderAddress());
         }
     }
