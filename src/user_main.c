@@ -7,7 +7,6 @@
 #include "pwm.h"
 #include "gpio.h"
 #include "espconn.h"
-#include <minhttp.h>
 #include "jsontree.h"
 #include "jsonparse.h"
 
@@ -31,11 +30,9 @@
 #define WEBSERVER_PORT 80
 #define DEVICE_DISCOVERY_PORT 12345
 
-static const char content_length[] = "Content-Length";
-static const char content_type[] = "Content-Type";
 static const char discovery_request[] = "whatstheesplampipagain?";
 static const char discovery_response[] = "openupitsme";
-static const char octet_stream_str[] = "application/octet-stream";
+static const char badresponse[] = "\x06\x00\x00\x00\x00\x00";
 
 static os_timer_t ptimer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
@@ -147,21 +144,13 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
 }
 
-uint8_t str_to_int(char* str, uint8_t len) {
-  uint8_t sum = 0;
-  for(uint8_t i = 0; i < len; i++) {
-    sum = (sum * 10) + (str[i] - '0');
-  }
-  return sum;
-}
-
 uint8_t ICACHE_FLASH_ATTR handle_get(void* espconn) {
-  char* okresponse = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n\x00\x00\x00\x00";
-  okresponse[38] = (pwm_step * 100) / PWM_STEP;
-  okresponse[39] = (rgb_values[0] * 100) / MAX_DUTY;
-  okresponse[40] = (rgb_values[1] * 100) / MAX_DUTY;
-  okresponse[41] = (rgb_values[2] * 100) / MAX_DUTY;
-  if(espconn_send(espconn, (uint8_t*)okresponse, 42)) {
+  char* okresponse = "\x06\x01\x00\x00\x00\x00";
+  okresponse[2] = (pwm_step * 100) / PWM_STEP;
+  okresponse[3] = (rgb_values[0] * 100) / MAX_DUTY;
+  okresponse[4] = (rgb_values[1] * 100) / MAX_DUTY;
+  okresponse[5] = (rgb_values[2] * 100) / MAX_DUTY;
+  if(espconn_send(espconn, (uint8_t*)okresponse, 6)) {
     return 0;
   }
   return 1;
@@ -193,46 +182,21 @@ void ICACHE_FLASH_ATTR tcp_recv_callback(void* arg, char* data, unsigned short l
 
   os_printf("tcp_recv_callback\n");
   os_timer_disarm(&ptimer);
-  char* method = NULL;
-  uint8_t method_len = 0;
-  char* badresponse = "HTTP/1.1 404 Bad Request\r\nContent-Length: 0\r\n\r\n";
-  char* data_end = data + len;
-  if( (data = mh_parse_request_first_line(data, data_end, &method, &method_len, NULL, NULL, NULL)) == NULL ) {
-    os_printf("error parsing first line!\n");
+  if(len != 6) {
+    os_printf("invalid length (not 6)\n");
     goto error;
   }
-  mh_header headers[2] = {
-    {
-      .header_key_begin = (char*)content_length,
-      .header_key_len = STRLEN(content_length),
-      .header_value_len = 0,
-      .header_value_begin = 0
-    },
-    {
-      .header_key_begin = (char*)content_type,
-      .header_key_len = STRLEN(content_type),
-      .header_value_len = 0,
-      .header_value_begin = 0
-    }
-  };
-  if( (data = mh_parse_headers_set(data, data_end, headers, 2)) == NULL) {
-    os_printf("error parsing headers!\n");
-    goto error;
-  }
-  uint8_t payload_size = str_to_int(headers[0].header_value_begin, headers[0].header_value_len);
+  len = *data;
+  data++;
 
-  len = data_end - data;
-  switch(*method) {
+  switch(*data) {
     case 'G': {
       uint8_t res = handle_get(arg);
       if(!res) goto error;
       break;
     }
     case 'P': {
-      if(!strequal(headers[1].header_value_begin, (char*)octet_stream_str, MIN(headers[1].header_value_len, STRLEN(octet_stream_str)))) {
-        goto error;
-      }
-      uint8_t res = handle_post(arg, data, len);
+      uint8_t res = handle_post(arg, ++data, len-2);
       if(!res) goto error;
       break;
     }
@@ -242,6 +206,7 @@ void ICACHE_FLASH_ATTR tcp_recv_callback(void* arg, char* data, unsigned short l
   }
   goto done;
 error:
+  os_printf("error\n");
   espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
 done:
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);

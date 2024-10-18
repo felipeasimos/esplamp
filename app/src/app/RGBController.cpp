@@ -27,6 +27,7 @@ QHostAddress RGBController::lampAddress() const {
 }
 
 void RGBController::setColor(const QColor& newColor) {
+    qDebug() << "setColor";
     if (color != newColor) {
         color = newColor;
         colorIsDirty = true;
@@ -57,20 +58,36 @@ void RGBController::setupTcpSocket() {
 }
 
 void RGBController::requestColor() {
-    if (m_lampAddress != QHostAddress::Null) return;
+    qDebug() << "requestColor\n";
+    m_lampAddress = QHostAddress("192.168.0.100");
+    setupTcpSocket();
+    qDebug() << m_lampAddress;
+    if (m_lampAddress == QHostAddress::Null) return;
     if (tcpSocket->state() != QAbstractSocket::ConnectedState) {
         tcpSocket->connectToHost(m_lampAddress, lampAPIPort);
     }
 }
 
 void RGBController::onConnected() {
-    tcpSocket->write("hellou");
+    QByteArray request{"\x06P\x00\x00\x00\x00", 6};
+    request[2] = 100;
+    request[3] = color.red();
+    request[4] = color.green();
+    request[5] = color.blue();
+    tcpSocket->write(request);
+    qDebug() << "connected\n";
 }
 
 void RGBController::onReadyRead() {
     QByteArray response = tcpSocket->readAll();
+    bool success = response[1] == 1;
     qDebug() << "response received!";
     qDebug() << response;
+    if(success) {
+        colorIsDirty = false;
+    } else {
+        qDebug() << "color update failed";
+    }
     tcpSocket->disconnect();
 }
 
@@ -84,6 +101,7 @@ void RGBController::onErrorOccurred() {
 }
 
 void RGBController::changeColor(const QString& newColorStr) {
+    qDebug() << "changeColor";
     if(!newColorStr.startsWith("#") || newColorStr.trimmed().length() != 7) return;
 
     bool valid;
