@@ -59,9 +59,6 @@ void RGBController::setupTcpSocket() {
 
 void RGBController::requestColor() {
     qDebug() << "requestColor\n";
-    m_lampAddress = QHostAddress("192.168.0.100");
-    setupTcpSocket();
-    qDebug() << m_lampAddress;
     if (m_lampAddress == QHostAddress::Null) return;
     if (tcpSocket->state() != QAbstractSocket::ConnectedState) {
         tcpSocket->connectToHost(m_lampAddress, lampAPIPort);
