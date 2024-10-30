@@ -35,6 +35,7 @@ public:
 private:
     void setupTcpSocket();
     void requestColor();
+    void requestColorWrite();
 
     QTcpSocket* tcpSocket = nullptr;
     QColor color{0,0,0};

@@ -1,6 +1,6 @@
 # Esp Lamp
 
-A simple esp8266 rgb lamp controllable by an API.
+A simple esp8266 rgb lamp controllable by an TCP API.
 
 ## How to Run
 
@@ -9,13 +9,36 @@ A simple esp8266 rgb lamp controllable by an API.
 3. Plug a esp8266 to your computer
 4. `pio run -t upload -t monitor`
     * get the server IP from here
-5. Use `curl` or another kind of REST client to communicate with the API
-    * `GET` -> get current RGB values
-    * `POST` -> set new RGB values
+5. Get lamp IP from console or monitor UDP broadcast on port 12345 coming from it with the message "openupitsme"
+    * I recommend using wireshark to monitor and get a feeling for it!
+6. send 6 bytes through TCP to get color/alter color:
 
 ```
-curl -vvvvv  192.168.0.105 -H "Content-Type: application/octet-stream" -X POST --data-raw "$(echo -e 'd\x01\x01\x01')" -vv -o a
+.-----------------------------------------------------.
+| length | P or G |pwn_step|   R    |    G   |   B    |
+| 1 byte | 1 byte | 1 byte | 1 byte | 1 byte | 1 byte |
+`-----------------------------------------------------´
 ```
+
+* `length` - always 6.
+* `P or G` - `P` to change color and fade effect intensity, `G` to get these information
+    * if `G` is used, all the other bytes are ignored, but must still be sent
+* `pwm_step` - fade effect intensity. Range from 0 to 100.
+* `RGB` fields - range from 0 to 100 each.
+
+7. receive back
+
+```
+.-----------------------------------------------------.
+| length | status |pwn_step|   R    |    G   |   B    |
+| 1 byte | 1 byte | 1 byte | 1 byte | 1 byte | 1 byte |
+`-----------------------------------------------------´
+```
+
+* `length` - always 6.
+* `status` - `1` if OK, `0` on error.
+* `pwm_step` - fade effect intensity. Range from 0 to 100.
+* `RGB` fields - range from 0 to 100 each.
 
 ### Roadmap
 

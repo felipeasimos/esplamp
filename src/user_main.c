@@ -24,6 +24,7 @@
 #define PERIOD 10000
 #define MAX_DUTY (PERIOD * 1000 / 45)
 #define RGB_TRANSITION_TIMER 50
+#define UDP_BROADCAST_TIMER 1000
 #define PWM_STEP ((RGB_TRANSITION_TIMER * MAX_DUTY)/5000)
 #define STRLEN(s) ((sizeof(s)/sizeof(s[0])) - 1)
 
@@ -32,9 +33,9 @@
 
 static const char discovery_request[] = "whatstheesplampipagain?";
 static const char discovery_response[] = "openupitsme";
-static const char badresponse[] = "\x06\x00\x00\x00\x00\x00";
 
 static os_timer_t ptimer;
+static os_timer_t udp_timer;
 static int32_t rgb_duties[3] = {MAX_DUTY, MAX_DUTY/4, MAX_DUTY/2};
 static uint32_t rgb_values[3] = {0};
 static int8_t directions[3] = {1, 1, 1};
@@ -50,7 +51,9 @@ static struct espconn tcp_espconn = {
 };
 
 static esp_udp espudp = {
-  .local_port = DEVICE_DISCOVERY_PORT
+  .local_port = DEVICE_DISCOVERY_PORT,
+  .remote_ip = {255, 255, 255, 255},
+  .remote_port = 12345
 };
 
 static struct espconn udp_espconn = {
@@ -140,16 +143,20 @@ void ICACHE_FLASH_ATTR rgb_transition(void *arg)
 
   // os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
 
-  os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
-  os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
+  // os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
+  // os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
+}
+
+void ICACHE_FLASH_ATTR generate_response_data(char* data) {
+  data[0] = (pwm_step * 100) / PWM_STEP;
+  data[1] = (rgb_values[0] * 100) / MAX_DUTY;
+  data[2] = (rgb_values[1] * 100) / MAX_DUTY;
+  data[3] = (rgb_values[2] * 100) / MAX_DUTY;
 }
 
 uint8_t ICACHE_FLASH_ATTR handle_get(void* espconn) {
-  char* okresponse = "\x06\x01\x00\x00\x00\x00";
-  okresponse[2] = (pwm_step * 100) / PWM_STEP;
-  okresponse[3] = (rgb_values[0] * 100) / MAX_DUTY;
-  okresponse[4] = (rgb_values[1] * 100) / MAX_DUTY;
-  okresponse[5] = (rgb_values[2] * 100) / MAX_DUTY;
+  char okresponse[] = "\x06\x01\x00\x00\x00\x00";
+  generate_response_data(okresponse+2);
   if(espconn_send(espconn, (uint8_t*)okresponse, 6)) {
     return 0;
   }
@@ -160,12 +167,15 @@ uint8_t ICACHE_FLASH_ATTR handle_post(void* espconn, char* data, unsigned short 
   if(len != 4) return 0;
   pwm_step = (data[0] * PWM_STEP) / 100;
   for(uint8_t i = 0; i < 3; i++) {
-      uint32_t new_rgb_value = data[1 + i] * MAX_DUTY / 100;
+      uint32_t new_rgb_value = (data[1 + i] * MAX_DUTY) / 100;
+      os_printf("data: %d\n", data[1+i]);
+      os_printf("MAX_DUTY: %d\n", MAX_DUTY);
+      os_printf("new_rgb_value: %d\n", new_rgb_value);
       directions[i] = new_rgb_value > rgb_values[i] ? 1 : -1;
       rgb_values[i] = new_rgb_value;
   }
 
-  os_printf("r: %u, g: %u, b: %u\n", rgb_duties[0], rgb_duties[1], rgb_duties[2]);
+  os_printf("r: %u, g: %u, b: %u\n", rgb_values[0], rgb_values[1], rgb_values[2]);
 
   return handle_get(espconn);
 }
@@ -207,7 +217,9 @@ void ICACHE_FLASH_ATTR tcp_recv_callback(void* arg, char* data, unsigned short l
   goto done;
 error:
   os_printf("error\n");
-  espconn_send(arg, (uint8_t*)badresponse, os_strlen(badresponse));
+  char badresponse[] = "\x06\x00\x00\x00\x00\x00";
+  generate_response_data(badresponse+2);
+  espconn_send(arg, (uint8_t*)badresponse, 6);
 done:
   os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
   os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 0);
@@ -227,6 +239,12 @@ void ICACHE_FLASH_ATTR tcp_reconnect_callback(void* arg, int8_t err) {
 
 void ICACHE_FLASH_ATTR tcp_connect_callback(void* arg) {
   os_printf("connect cb\n");
+}
+
+void ICACHE_FLASH_ATTR udp_broadcast(void *arg) {
+  if(espconn_sendto(&udp_espconn, (uint8_t*)discovery_response, STRLEN(discovery_response))) {
+    os_printf("failed to send udp broadcast beacon\n");
+  }
 }
 
 void ICACHE_FLASH_ATTR udp_recv_callback(void* espconn, char* data, unsigned short len) {
@@ -251,6 +269,7 @@ void ICACHE_FLASH_ATTR block_for_wifi(void) {
       os_timer_arm(&ptimer, 1000, 1);
       return;
     }
+    os_timer_disarm(&ptimer);
     // tcp
     espconn_regist_connectcb(&tcp_espconn, tcp_connect_callback);
     espconn_regist_recvcb(&tcp_espconn, tcp_recv_callback);
@@ -263,8 +282,12 @@ void ICACHE_FLASH_ATTR block_for_wifi(void) {
     os_printf("espconn create = %d\n",res);
 
     os_printf("espconn_accept response: %u\n", espconn_accept(&tcp_espconn));
+
     os_timer_setfn(&ptimer, (os_timer_func_t *)rgb_transition, NULL);
     os_timer_arm(&ptimer, RGB_TRANSITION_TIMER, 1);
+
+    os_timer_setfn(&udp_timer, (os_timer_func_t*)udp_broadcast, NULL);
+    os_timer_arm(&udp_timer, UDP_BROADCAST_TIMER, 1);
 }
 
 void ICACHE_FLASH_ATTR user_init(void)
